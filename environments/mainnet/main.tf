@@ -32,12 +32,12 @@ module "liquidation_service" {
 
   indexer_image_tag = ""
 
-  indexer_batch_size = 500
+  indexer_batch_size = 1000
 
-  ecs_indexer_min_capacity         = 0
+  ecs_indexer_min_capacity         = 1
   ecs_indexer_max_capacity         = 2
-  ecs_indexer_scaling_target_value = 30
-  ecs_indexer_scale_out_cooldown   = 30
+  ecs_indexer_scaling_target_value = 10
+  ecs_indexer_scale_out_cooldown   = 300
   ecs_indexer_scale_in_cooldown    = 300
 
   indexer_sqs_visibility_timeout = 600
