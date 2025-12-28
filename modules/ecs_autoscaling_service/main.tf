@@ -274,7 +274,7 @@ resource "aws_iam_role_policy" "execution_ssm" {
 resource "aws_ecs_task_definition" "service" {
   family                   = local.family
   network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
+  requires_compatibilities = ["FARGATE", "FARGATE_SPOT"]
   cpu                      = var.cpu
   memory                   = var.memory
   execution_role_arn       = var.execution_role_arn
@@ -322,8 +322,8 @@ resource "aws_ecs_service" "service" {
     assign_public_ip = var.network_config.assign_public_ip
   }
 
-  force_new_deployment = true
-  launch_type          = "FARGATE"
+  # force_new_deployment = true
+  # launch_type          = "FARGATE"
 }
 
 resource "aws_appautoscaling_target" "service" {
