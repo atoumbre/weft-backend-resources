@@ -10,7 +10,6 @@ terraform {
 
 provider "aws" {}
 
-
 module "admin" {
   source = "../../blueprints/admin"
 

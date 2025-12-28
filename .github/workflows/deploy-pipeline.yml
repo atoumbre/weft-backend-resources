@@ -90,20 +90,20 @@ jobs:
       resource-path: environments/mainnet
       terraform-key: mainnet.tfstate
 
-  deploy-stokenet:
-    needs: [test, changes, deploy-global]
-    if: |
-      always() && needs.test.result == 'success' &&
-      needs.changes.outputs.target-env == 'stokenet' &&
-      (needs.changes.outputs.common == 'true' || 
-       needs.changes.outputs.stokenet == 'true' ||
-       github.event_name == 'workflow_dispatch')
-    concurrency:
-      group: stokenet-deployment
-      cancel-in-progress: false
-    uses: ./.github/workflows/_deploy-terraform.yml
-    secrets: inherit
-    with:
-      resource-name: stokenet
-      resource-path: environments/stokenet
-      terraform-key: stokenet.tfstate
+  # deploy-stokenet:
+  #   needs: [test, changes, deploy-global]
+  #   if: |
+  #     always() && needs.test.result == 'success' &&
+  #     needs.changes.outputs.target-env == 'stokenet' &&
+  #     (needs.changes.outputs.common == 'true' || 
+  #      needs.changes.outputs.stokenet == 'true' ||
+  #      github.event_name == 'workflow_dispatch')
+  #   concurrency:
+  #     group: stokenet-deployment
+  #     cancel-in-progress: false
+  #   uses: ./.github/workflows/_deploy-terraform.yml
+  #   secrets: inherit
+  #   with:
+  #     resource-name: stokenet
+  #     resource-path: environments/stokenet
+  #     terraform-key: stokenet.tfstate
