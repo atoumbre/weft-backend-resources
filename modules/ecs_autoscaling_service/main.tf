@@ -274,7 +274,7 @@ resource "aws_iam_role_policy" "execution_ssm" {
 resource "aws_ecs_task_definition" "service" {
   family                   = local.family
   network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE", "FARGATE_SPOT"]
+  requires_compatibilities = ["FARGATE"]
   cpu                      = var.cpu
   memory                   = var.memory
   execution_role_arn       = var.execution_role_arn
