@@ -53,23 +53,23 @@ module "liquidation_service" {
   dispatcher_timeout  = 300
 }
 
-# module "price_updater_service" {
-#   source = "../../blueprints/price-updater-service"
+module "price_updater_service" {
+  source = "../../blueprints/price-updater-service"
 
-#   function_name      = "weft-mainnet-oracle-updater"
-#   log_retention_days = 7
-#   log_level          = "info"
+  function_name      = "weft-mainnet-oracle-updater"
+  log_retention_days = 7
+  log_level          = "info"
 
-#   oracle_updater_schedule               = "rate(1 minutes)"
-#   oracle_updater_timeout                = 300
-#   oracle_updater_memory                 = 128
-#   oracle_updater_account_address        = "TODO_MAINNET_ADDRESS"
-#   oracle_updater_badge_resource_address = "TODO_MAINNET_ADDRESS"
-#   oracle_updater_component_address      = "TODO_MAINNET_ADDRESS"
-#   oracle_updater_badge_nft_id           = "#1#"
+  oracle_updater_schedule               = "rate(10 minutes)"
+  oracle_updater_timeout                = 300
+  oracle_updater_memory                 = 128
+  oracle_updater_account_address        = "TODO_MAINNET_ADDRESS"
+  oracle_updater_badge_resource_address = "TODO_MAINNET_ADDRESS"
+  oracle_updater_component_address      = "TODO_MAINNET_ADDRESS"
+  oracle_updater_badge_nft_id           = "#1#"
 
-#   ssm_parameter_name_seed_phrase = "/seed_phrase/price_updater/mainnet"
-# }
+  ssm_parameter_name_seed_phrase = "/seed_phrase/price_updater/mainnet"
+}
 
 
 module "grafana_metrics" {
