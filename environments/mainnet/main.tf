@@ -109,9 +109,10 @@ module "grafana_logs" {
 # Forward Lambda logs to Grafana Cloud via Firehose
 locals {
   lambda_log_groups = {
-    liquidator = module.liquidation_service.liquidator_log_group_name
-    dispatcher = module.liquidation_service.dispatcher_log_group_name
-    indexer    = module.liquidation_service.indexer_log_group_name
+    liquidator    = module.liquidation_service.liquidator_log_group_name
+    dispatcher    = module.liquidation_service.dispatcher_log_group_name
+    indexer       = module.liquidation_service.indexer_log_group_name
+    price_updater = module.price_updater_service.log_group_name
   }
 }
 
