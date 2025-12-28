@@ -65,6 +65,7 @@
     "tfvars",
     "toset",
     "zipfile",
-    "devnet"
+    "devnet",
+    "sched"
   ]
 }
