@@ -1,0 +1,12 @@
+# Common/shared paths that trigger all environments
+common:
+  - "blueprints/**"
+  - "modules/**"
+
+# Environment-specific paths
+global:
+  - "environments/global/**"
+mainnet:
+  - "environments/mainnet/**"
+stokenet:
+  - "environments/stokenet/**"

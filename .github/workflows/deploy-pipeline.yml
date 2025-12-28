@@ -1,0 +1,109 @@
+name: Deploy Pipeline
+
+on:
+  push:
+    branches: [main, stage]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        type: choice
+        options:
+          - mainnet
+          - stokenet
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 1. Run tests first
+  test:
+    uses: ./.github/workflows/test-pipeline.yml
+
+  # 2. Detect what changed
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      common: ${{ steps.filter.outputs.common }}
+      global: ${{ steps.filter.outputs.global }}
+      mainnet: ${{ steps.filter.outputs.mainnet }}
+      stokenet: ${{ steps.filter.outputs.stokenet }}
+      target-env: ${{ steps.env.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: .github/filters.yml
+
+      - name: Set target environment
+        id: env
+        run: |
+          if [ -n "${{ github.event.inputs.environment }}" ]; then
+            echo "name=${{ github.event.inputs.environment }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref_name }}" == "main" ]; then
+            echo "name=mainnet" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=stokenet" >> "$GITHUB_OUTPUT"
+          fi
+
+  # 3. Deploy global (if common or global changed)
+  deploy-global:
+    needs: [test, changes]
+    if: |
+      needs.changes.outputs.common == 'true' || 
+      needs.changes.outputs.global == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    concurrency:
+      group: global-deployment
+      cancel-in-progress: false
+    uses: ./.github/workflows/_deploy-terraform.yml
+    secrets: inherit
+    with:
+      resource-name: global
+      resource-path: environments/global
+      terraform-key: shared.tfstate
+
+  # 4. Deploy target environment (if common or env-specific changed)
+  deploy-mainnet:
+    needs: [test, changes, deploy-global]
+    if: |
+      always() && needs.test.result == 'success' &&
+      needs.changes.outputs.target-env == 'mainnet' &&
+      (needs.changes.outputs.common == 'true' || 
+       needs.changes.outputs.mainnet == 'true' ||
+       github.event_name == 'workflow_dispatch')
+    concurrency:
+      group: mainnet-deployment
+      cancel-in-progress: false
+    uses: ./.github/workflows/_deploy-terraform.yml
+    secrets: inherit
+    with:
+      resource-name: mainnet
+      resource-path: environments/mainnet
+      terraform-key: mainnet.tfstate
+
+  deploy-stokenet:
+    needs: [test, changes, deploy-global]
+    if: |
+      always() && needs.test.result == 'success' &&
+      needs.changes.outputs.target-env == 'stokenet' &&
+      (needs.changes.outputs.common == 'true' || 
+       needs.changes.outputs.stokenet == 'true' ||
+       github.event_name == 'workflow_dispatch')
+    concurrency:
+      group: stokenet-deployment
+      cancel-in-progress: false
+    uses: ./.github/workflows/_deploy-terraform.yml
+    secrets: inherit
+    with:
+      resource-name: stokenet
+      resource-path: environments/stokenet
+      terraform-key: stokenet.tfstate

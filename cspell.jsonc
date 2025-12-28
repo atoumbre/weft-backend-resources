@@ -1,0 +1,70 @@
+{
+  // Version of the setting file.  Always 0.2
+  "version": "0.2",
+  // language - current active spelling language
+  "language": "en",
+  // flagWords - list of words to be always considered incorrect
+  // This is useful for offensive words and common spelling errors.
+  // For example "hte" should be "the"
+  "flagWords": [],
+  // Dictionaries "Spanish", "ruby", and "corp-term" will always be checked.
+  // Including "Spanish" in the list of dictionaries means both Spanish and English
+  // words will be considered correct.
+  "dictionaries": ["fr-FR"],
+  "ignorePaths": [
+    "./**/node_modules/**",
+    "./**/tests/**",
+    "./**/dist/**",
+    "./**/example/**",
+    "./**/*.wasm",
+    "./**/*.tfvars",
+    "./**/*.tfstate",
+    "./**/*.tfstate.backup",
+    "./**/*.zip",
+    "./**/*wallet*",
+    "./**/pnpm-lock.yaml",
+    "./**/pnpm-workspace.yaml"
+  ],
+  // words - list of words to be always considered correct
+  "words": [
+    "appautoscaling",
+    "atoumbre",
+    "awslogs",
+    "awsvpc",
+    "buildx",
+    "caviarnine",
+    "cdps",
+    "chdir",
+    "coingecko",
+    "Collateralized",
+    "cooldown",
+    "corepack",
+    "dorny",
+    "esac",
+    "fargate",
+    "fileb",
+    "github",
+    "grafana",
+    "grafanalabs",
+    "hashicorp",
+    "hostnames",
+    "jsonencode",
+    "logfilter",
+    "mainnet",
+    "OIDC",
+    "opentelemetry",
+    "oservability",
+    "outfile",
+    "precheck",
+    "promtail",
+    "pyth",
+    "radixdlt",
+    "redrive",
+    "stokenet",
+    "tfstate",
+    "tfvars",
+    "toset",
+    "zipfile",
+    "devnet"
+  ]
+}

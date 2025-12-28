@@ -1,0 +1,65 @@
+name: Deploy Terraform
+
+on:
+  workflow_call:
+    inputs:
+      resource-name:
+        required: true
+        type: string
+        description: "Name of the resource"
+      resource-path:
+        required: true
+        type: string
+        description: "Path to the Terraform directory"
+      terraform-key:
+        required: true
+        type: string
+        description: "Terraform state file key"
+      terraform-version:
+        required: false
+        type: string
+        default: "1.6.0"
+        description: "Terraform version"
+      aws-region:
+        required: false
+        type: string
+        default: "us-east-1"
+        description: "AWS region"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy ${{ inputs.resource-name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/weft-github-actions-role
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Get AWS Account ID
+        id: account
+        run: echo "id=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_OUTPUT"
+
+      - name: Terraform Init
+        working-directory: ${{ inputs.resource-path }}
+        run: |
+          terraform init -reconfigure \
+            -backend-config="bucket=admin-terraform-state-${{ steps.account.outputs.id }}" \
+            -backend-config="key=${{ inputs.terraform-key }}" \
+            -backend-config="region=${{ inputs.aws-region }}"
+
+      - name: Terraform Apply
+        working-directory: ${{ inputs.resource-path }}
+        run: terraform apply -auto-approve
