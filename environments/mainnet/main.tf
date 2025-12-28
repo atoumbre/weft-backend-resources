@@ -75,10 +75,16 @@ module "liquidation_service" {
 module "grafana_metrics" {
   source = "../../blueprints/grafana-metrics"
 
-  aws_region                                      = var.aws_region
-  firehose_stream_name                            = "grafana-cloud-mainnet-metric-stream"
-  fallback_bucket_name                            = "grafana-cloud-mainnet-metric-stream-fallback"
-  include_namespaces                              = ["AWS/ECS", "AWS/SQS", "AWS/Lambda"]
+  aws_region           = var.aws_region
+  firehose_stream_name = "grafana-cloud-mainnet-metric-stream"
+  fallback_bucket_name = "grafana-cloud-mainnet-metric-stream-fallback"
+  include_namespaces = [
+    "AWS/ECS",
+    "AWS/SQS",
+    "AWS/Lambda",
+    "AWS/Billing",
+    "AWS/CloudWatch/MetricStreams"
+  ]
   ssm_parameter_name_grafana_metric_write_token   = "/observability/grafana_metric_write_token"
   ssm_parameter_name_grafana_cloud_provider_token = "/observability/grafana_provider_token"
 
