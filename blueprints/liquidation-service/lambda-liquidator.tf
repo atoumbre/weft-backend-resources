@@ -18,7 +18,7 @@ module "liquidator" {
     LIQUIDATION_QUEUE_URL = module.indexer_service.queues["liquidation"].id
     RADIX_GATEWAY_URL     = var.radix_gateway_url
     LOG_LEVEL             = var.log_level
-    SEED_PHRASE           = data.aws_ssm_parameter.liquidation_seed.value
+    SEED_PHRASE_PARAM     = data.aws_ssm_parameter.liquidation_seed.name
   }
 
   extra_iam_policy_statements = [

@@ -60,8 +60,16 @@ module "oracle_updater" {
     ORACLE_COMPONENT_ADDRESS = var.oracle_updater_component_address
     BADGE_NFT_ID             = var.oracle_updater_badge_nft_id
     LOG_LEVEL                = var.log_level
-    SEED_PHRASE              = data.aws_ssm_parameter.seed_phrase.value
+    SEED_PHRASE_PARAM        = data.aws_ssm_parameter.seed_phrase.name
   }
+
+  extra_iam_policy_statements = [
+    {
+      effect    = "Allow"
+      actions   = ["ssm:GetParameters", "ssm:GetParameter"]
+      resources = [data.aws_ssm_parameter.seed_phrase.arn]
+    }
+  ]
 }
 
 variable "log_level" {
