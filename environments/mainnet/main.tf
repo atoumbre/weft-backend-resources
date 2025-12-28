@@ -82,8 +82,7 @@ module "grafana_metrics" {
     "AWS/ECS",
     "AWS/SQS",
     "AWS/Lambda",
-    "AWS/Billing",
-    "AWS/CloudWatch/MetricStreams"
+    "AWS/Billing"
   ]
   ssm_parameter_name_grafana_metric_write_token   = "/observability/grafana_metric_write_token"
   ssm_parameter_name_grafana_cloud_provider_token = "/observability/grafana_provider_token"
