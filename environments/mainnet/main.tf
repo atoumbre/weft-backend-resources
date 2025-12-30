@@ -37,8 +37,8 @@ module "liquidation_service" {
   ecs_indexer_min_capacity         = 1
   ecs_indexer_max_capacity         = 5
   ecs_indexer_scaling_target_value = 10
-  ecs_indexer_scale_out_cooldown   = 300
-  ecs_indexer_scale_in_cooldown    = 300
+  ecs_indexer_scale_out_cooldown   = 120
+  ecs_indexer_scale_in_cooldown    = 120
 
   indexer_sqs_visibility_timeout = 600
   indexer_sqs_max_receive_count  = 3
