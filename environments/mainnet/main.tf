@@ -35,7 +35,7 @@ module "liquidation_service" {
   indexer_batch_size = 1000
 
   ecs_indexer_min_capacity         = 1
-  ecs_indexer_max_capacity         = 2
+  ecs_indexer_max_capacity         = 5
   ecs_indexer_scaling_target_value = 10
   ecs_indexer_scale_out_cooldown   = 300
   ecs_indexer_scale_in_cooldown    = 300
@@ -107,6 +107,7 @@ module "grafana_logs" {
 
 
 # Forward Lambda logs to Grafana Cloud via Firehose
+
 locals {
   lambda_log_groups = {
     liquidator    = module.liquidation_service.liquidator_log_group_name

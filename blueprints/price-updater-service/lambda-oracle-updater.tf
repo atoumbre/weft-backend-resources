@@ -46,6 +46,23 @@ data "aws_ssm_parameter" "seed_phrase" {
   name = var.ssm_parameter_name_seed_phrase
 }
 
+variable "log_level" {
+  description = "Log level for all services (debug, info, warn, error)"
+  type        = string
+  default     = "info"
+}
+
+variable "log_retention_days" {
+  description = "Number of days to retain logs"
+  type        = number
+  default     = 7
+}
+
+variable "function_name" {
+  description = "Name of the function"
+  type        = string
+}
+
 module "oracle_updater" {
   source = "../../modules/scheduled_lambda"
 
@@ -70,21 +87,4 @@ module "oracle_updater" {
       resources = [data.aws_ssm_parameter.seed_phrase.arn]
     }
   ]
-}
-
-variable "log_level" {
-  description = "Log level for all services (debug, info, warn, error)"
-  type        = string
-  default     = "info"
-}
-
-variable "log_retention_days" {
-  description = "Number of days to retain logs"
-  type        = number
-  default     = 7
-}
-
-variable "function_name" {
-  description = "Name of the function"
-  type        = string
 }
