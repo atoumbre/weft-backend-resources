@@ -78,6 +78,12 @@ module "observability" {
 
   filter_pattern = ""
 
+  metric_namespaces = [
+    "AWS/ECS",
+    "AWS/SQS",
+    "AWS/Lambda",
+  ]
+
   log_groups = {
     "liquidator"    = module.liquidation_service.liquidator_log_group_name
     "dispatcher"    = module.liquidation_service.dispatcher_log_group_name

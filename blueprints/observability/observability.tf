@@ -18,17 +18,18 @@ variable "filter_pattern" {
   type        = string
 }
 
+variable "metric_namespaces" {
+  description = "List of AWS namespaces to include in the metric stream."
+  type        = list(string)
+}
+
 module "grafana_metrics" {
   source = "../../modules/grafana-metric-stream"
 
-  aws_region           = var.aws_region
-  firehose_stream_name = "grafana-cloud-${var.environment}-metric-stream"
-  fallback_bucket_name = "grafana-cloud-${var.environment}-metric-stream-fallback"
-  include_namespaces = [
-    "AWS/ECS",
-    "AWS/SQS",
-    "AWS/Lambda",
-  ]
+  aws_region                                      = var.aws_region
+  firehose_stream_name                            = "grafana-cloud-${var.environment}-metric-stream"
+  fallback_bucket_name                            = "grafana-cloud-${var.environment}-metric-stream-fallback"
+  include_namespaces                              = var.metric_namespaces
   ssm_parameter_name_grafana_metric_write_token   = "/observability/grafana_metric_write_token"
   ssm_parameter_name_grafana_cloud_provider_token = "/observability/grafana_provider_token"
 
