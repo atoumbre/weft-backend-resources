@@ -26,7 +26,6 @@ module "liquidation_service" {
   log_retention_days = 7
   log_level          = "info"
 
-  # ECS Configs
   ecs_indexer_cpu    = "256"
   ecs_indexer_memory = "512"
 
@@ -71,59 +70,18 @@ module "price_updater_service" {
   ssm_parameter_name_seed_phrase = "/seed_phrase/price_updater/mainnet"
 }
 
+module "observability" {
+  source = "../../blueprints/observability"
 
-module "grafana_metrics" {
-  source = "../../blueprints/grafana-metrics"
+  aws_region  = var.aws_region
+  environment = "mainnet"
 
-  aws_region           = var.aws_region
-  firehose_stream_name = "grafana-cloud-mainnet-metric-stream"
-  fallback_bucket_name = "grafana-cloud-mainnet-metric-stream-fallback"
-  include_namespaces = [
-    "AWS/ECS",
-    "AWS/SQS",
-    "AWS/Lambda",
-    "AWS/Billing"
-  ]
-  ssm_parameter_name_grafana_metric_write_token   = "/observability/grafana_metric_write_token"
-  ssm_parameter_name_grafana_cloud_provider_token = "/observability/grafana_provider_token"
+  filter_pattern = ""
 
-  grafana_cloud_stack_slug = "atoumbre"
-  cloud_provider_url       = "https://cloud-provider-api-prod-us-east-3.grafana.net"
-}
-
-module "grafana_logs" {
-  source = "../../blueprints/grafana-logs"
-
-  aws_region                                 = var.aws_region
-  firehose_stream_name                       = "grafana-cloud-mainnet-log-stream"
-  fallback_bucket_name                       = "grafana-cloud-mainnet-log-stream-fallback"
-  ssm_parameter_name_grafana_log_write_token = "/observability/grafana_log_token"
-
-  logs_instance_id = "1432998"
-  target_endpoint  = "https://aws-logs-prod-042.grafana.net/aws-logs/api/v1/push"
-
-
-}
-
-
-# Forward Lambda logs to Grafana Cloud via Firehose
-
-locals {
-  lambda_log_groups = {
-    liquidator    = module.liquidation_service.liquidator_log_group_name
-    dispatcher    = module.liquidation_service.dispatcher_log_group_name
-    indexer       = module.liquidation_service.indexer_log_group_name
-    price_updater = module.price_updater_service.log_group_name
+  log_groups = {
+    "liquidator"    = module.liquidation_service.liquidator_log_group_name
+    "dispatcher"    = module.liquidation_service.dispatcher_log_group_name
+    "indexer"       = module.liquidation_service.indexer_log_group_name
+    "price_updater" = module.price_updater_service.log_group_name
   }
-}
-
-resource "aws_cloudwatch_log_subscription_filter" "lambda_logs" {
-  for_each = local.lambda_log_groups
-
-  name            = "${each.key}_log_filter"
-  role_arn        = module.grafana_logs.logs_role_arn
-  log_group_name  = each.value
-  destination_arn = module.grafana_logs.firehose_stream_arn
-  distribution    = "ByLogStream"
-  filter_pattern  = ""
 }
