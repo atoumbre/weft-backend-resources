@@ -165,7 +165,7 @@ Its responsibilities include:
 * constructing and submitting the transaction,
 * recording execution outcome for monitoring and troubleshooting.
 
-Lambda is a strong fit for this tier because liquidation work is bursty, independent, and short-lived.
+Lambda is a strong fit for this tier because liquidation work in burst, independent, and short-lived.
 
 ---
 
@@ -193,7 +193,7 @@ The design makes pressure visible instead of hiding it:
 
 * if indexing slows, the indexer queue grows,
 * if execution slows, the liquidation queue grows,
-* both حالات remain observable through queue depth and message age.
+* Both remain observable through queue depth and message age.
 
 That is a deliberate operational choice. The goal is not to pretend the system never experiences backlog; the goal is to make backlog **safe, measurable, and manageable**.
 
