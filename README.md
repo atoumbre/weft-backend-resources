@@ -1,161 +1,333 @@
-# Enterprise-Grade Cloud Infrastructure for DeFi
+# Production-Grade Cloud Infrastructure for DeFi Liquidation Operations
 
-[![Terraform](https://img.shields.io/badge/IaC-Terraform-blueviolet?style=for-the-badge&logo=terraform)](https://www.terraform.io/)
-[![AWS](https://img.shields.io/badge/Cloud-AWS-orange?style=for-the-badge&logo=amazon-aws)](https://aws.amazon.com/)
+[![Terraform](https://img.shields.io/badge/IaC-Terraform-blueviolet?style=for-the-badge\&logo=terraform)](https://www.terraform.io/)
+[![AWS](https://img.shields.io/badge/Cloud-AWS-orange?style=for-the-badge\&logo=amazon-aws)](https://aws.amazon.com/)
 [![Radix DLT](https://img.shields.io/badge/DLT-Radix-blue?style=for-the-badge)](https://www.radixdlt.com/)
 
-This repository implements the cloud-native backend infrastructure for **Weft Finance**, a decentralized lending protocol built on Radix DLT. The system maintains real-time synchronization with blockchain state while executing time-critical liquidations that can scale to handle thousands of concurrent operations.
+This repository contains the Terraform-managed AWS infrastructure behind **Weft Finance**, a decentralized lending protocol built on **Radix DLT**.
 
+The platform was designed for a demanding real-world backend scenario: monitor large numbers of collateralized positions, evaluate liquidation risk at scale, and execute liquidation transactions quickly during market stress, while keeping cloud costs controlled during normal conditions.
 
----
-## System Overview
-
-The system monitors thousands of Collateralized Debt Positions (CDPs) on the Radix ledger. When market conditions shift and positions become under-collateralized, they must be liquidated immediately to protect protocol solvency. This creates three competing requirements: maintaining accurate blockchain state, processing liquidations within seconds of detection, and optimizing cloud costs across highly variable workloads.
-
-The solution is a decoupled, event-driven architecture that separates workload scheduling, state processing, and transaction execution into specialized tiers. Each tier uses the most appropriate AWS service for its specific characteristics, resulting in a system that scales from near-zero cost during idle periods to handling thousands of concurrent operations during market volatility.
-
-
-## Design Philosophy
-
-### Asynchronous Event-Driven Architecture
-
-Every tier communicates exclusively via Amazon SQS, creating strong decoupling between components. The Dispatcher can continue queueing work even if the Indexer is down for maintenance. When the Indexer restarts, it simply processes the backlog at its own pace. This decoupling also provides natural back-pressure management. We don't overwhelm the Radix Gateway with thousands of simultaneous requests; instead, we process at a rate our downstream dependencies can handle, controlled by the number of running ECS tasks.
-
-SQS provides at-least-once delivery guarantees, meaning work is never lost. If an Indexer task crashes mid-processing, the message becomes visible again after the visibility timeout expires, and another task picks it up. Queue depth metrics expose system health clearly. If the Liquidation queue grows faster than Lambda can drain it, we immediately know there's a bottleneck to investigate.
-
-The tradeoff is eventual consistency. There's typically a 30-90 second delay between a blockchain state change and liquidation execution. For Weft Finance, this latency is acceptable given the protocol's design and typical market movement speeds. For high-frequency trading applications, this architecture would not be appropriate.
-
-### Infrastructure as Code: Modular Design
-
-The Terraform codebase follows a three-layer hierarchy. At the bottom are generic modules that implement AWS primitives like S3 buckets, VPC configurations, and ECS clusters. These modules are reusable across any project. The middle layer consists of blueprints that compose modules into complete service architectures, such as the liquidation service combining queues, compute, and storage into a cohesive system. The top layer contains environments, where we instantiate blueprints with specific parameters for mainnet versus stokenet.
-
-This structure enables environment parity. Both mainnet and stokenet use identical infrastructure code, differing only in parameters like CPU allocation and memory limits. This eliminates "works in staging but fails in production" issues that plague organizations using different infrastructure patterns across environments. Adding a third environment like devnet requires only a 20-line configuration file that references the existing blueprint.
-
-The upfront complexity is higher than a flat Terraform structure. Writing the initial modules and blueprints takes more time than writing inline resources. However, this investment pays dividends as the system evolves. Changes propagate consistently across all environments, testing becomes systematic rather than ad-hoc, and new team members can understand the architecture by reading the blueprint structure rather than parsing thousands of lines of resource definitions.
-
+From a portfolio and engineering perspective, this project demonstrates practical experience in **cloud architecture**, **distributed backend design**, **Infrastructure as Code**, **scalable event-driven systems**, **cost-aware AWS operations**, and **production-focused observability**.
 
 ---
 
-## The 3-Tier Architecture + Supporting Services
+## What This Project Demonstrates
+
+This project highlights hands-on capability in areas that are highly relevant to cloud, platform, DevOps, backend, and infrastructure engineering roles:
+
+* designing a distributed AWS architecture for a time-sensitive financial workload,
+* structuring Terraform into reusable modules, service blueprints, and environment-specific deployments,
+* building queue-driven workflows with explicit fault isolation and back-pressure,
+* balancing latency, resilience, and cost through targeted service choices,
+* implementing observable infrastructure with centralized logs and metrics,
+* validating operational recovery through full teardown and redeployment.
+
+---
+
+## Project Context
+
+Weft Finance must continuously assess the health of a large set of **Collateralized Debt Positions (CDPs)**. When market conditions change and a position becomes unsafe, the platform must detect that condition and attempt liquidation quickly enough to protect protocol solvency.
+
+That creates a challenging backend problem with three competing demands:
+
+* maintain a near-current operational view of on-ledger state,
+* process large volumes of positions efficiently,
+* react quickly during bursts of liquidation pressure without paying for peak infrastructure all the time.
+
+This repository implements the cloud infrastructure that supports that operating model.
+
+---
+
+## Architecture Overview
+
+The system uses **scheduled polling plus asynchronous internal processing**.
+
+Rather than relying on a continuously running streaming architecture, it follows a simpler and more cost-efficient control loop:
+
+1. a scheduler triggers a dispatcher every 5 minutes,
+2. the dispatcher partitions the workload into batches,
+3. indexer workers process those batches and identify liquidation candidates,
+4. liquidation jobs are queued and drained independently,
+5. stale candidates are validated again before execution.
+
+This approach was chosen deliberately. It provides a strong balance between **operational simplicity**, **resilience**, **scalability**, and **cost control**.
+
+### Core performance targets
+
+* **Polling cadence:** every 5 minutes
+* **Liquidation queue drain target:** under 15 seconds once a liquidation job reaches the execution queue
+
+This means the platform is designed for **near-real-time enforcement**, not ultra-low-latency streaming. That tradeoff is intentional and aligned with the protocol’s operational needs.
+
+---
+
+## High-Level Architecture
 
 ```mermaid
 graph TD
 
     subgraph "Tier 1: Orchestration Layer"
         EB[EventBridge Scheduler] --> D[Lambda Dispatcher]
-        D -- "Enqueues Work Units" --> Q1[SQS Indexer Queue]
+        D -- "Enqueues Indexing Jobs" --> Q1[SQS Indexer Queue]
     end
 
     subgraph "Tier 2: Processing Layer"
-        Q1 --> ASG[Application Auto Scaling]
-        ASG --> ECS[ECS Fargate Cluster]
+        Q1 --> ECS[ECS Cluster]
+        ECS --> CP[ECS Capacity Providers]
+        CP --> OD[Baseline Standard Capacity]
+        CP --> SP[Burst Spot Capacity]
         ECS --> I1[Indexer Task 1]
         ECS --> I2[Indexer Task 2]
         ECS --> IN[Indexer Task N]
-        I1 & I2 & IN --> S3[(S3 State Store)]
-        I1 & I2 & IN --> Q2[SQS Liquidation Queue]
+        I1 --> S3[(S3 Batch Snapshot Store)]
+        I2 --> S3
+        IN --> S3
+        I1 --> Q2[SQS Liquidation Queue]
+        I2 --> Q2
+        IN --> Q2
     end
 
     subgraph "Tier 3: Execution Layer"
         Q2 --> L[Lambda Liquidator]
         L --> RN[Radix Network]
     end
-
-    style ECS fill:#f96,stroke:#333,stroke-width:3px
-    style D fill:#6cf,stroke:#333,stroke-width:2px
-    style L fill:#6cf,stroke:#333,stroke-width:2px
 ```
 
-### Tier 1: Orchestration Layer (The Dispatcher)
+---
 
-The Dispatcher is an AWS Lambda function triggered by EventBridge on a configurable schedule (typically every 1-5 minutes). It queries the Radix Gateway API for the current ledger epoch, partitions the workload into batches of CDPs, and enqueues messages to the Indexer SQS queue.
+## Tier 1: Orchestration Layer
 
-Lambda is used here for its cost-efficiency at low duty cycles. The dispatcher runs briefly and is stateless, making it a perfect fit for serverless execution.
+### Dispatcher
 
-### Tier 2: Processing Layer (The Indexer)
+The **Dispatcher** is an AWS Lambda function triggered by **EventBridge Scheduler** every 5 minutes.
 
-The Indexer performs the heavy computational work. It runs as a cluster of ECS Fargate tasks that scale based on the SQS queue depth. Each task consumes messages, fetches full CDP data via the Radix Gateway API, calculates health ratios, and persists the results to an S3 bucket (or checks against a threshold).
+Its responsibilities are straightforward:
 
-Key characteristics:
-- **Auto-scaling**: The number of tasks scales out when the queue grows (e.g., >30 messages per task) and scales in to zero when the queue is empty.
-- **Persistent Compute**: Fargate is chosen over Lambda here to avoid timeout limits during heavy indexing sessions and to potentially benefit from connection pooling, though the primary driver is the long-running nature of processing large batches of CDPs.
-- **State Storage**: S3 is used as a highly durable and cost-effective key-value store for CDP state data.
+* query the Radix Gateway for the current synchronization point,
+* determine which positions or ranges need to be evaluated,
+* partition that workload into manageable units,
+* push those units into the Indexer queue.
 
-### Tier 3: Execution Layer (The Liquidator)
+This tier is intentionally lightweight. It does not perform heavy protocol computation; it exists to orchestrate work predictably and cheaply.
 
-The Liquidator is an AWS Lambda function triggered directly by the Liquidation SQS queue. When the Indexer identifies an under-collateralized position, it sends a message to this queue.
+Using Lambda here keeps the orchestration layer stateless, low-cost, and simple to operate.
 
-- **Event-Driven**: The Lambda executes immediately upon receiving a message.
-- **Concurrency**: AWS Lambda scales concurrently to handle bursts of liquidations (up to the configured concurrency limit, e.g., 50), ensuring protocols remain solvent even during market crashes.
-- **Isolation**: Each liquidation is an independent execution, preventing failures from cascading.
+---
 
+## Tier 2: Processing Layer
+
+### Indexer
+
+The **Indexer** is the main processing tier. It runs on **Amazon ECS** and performs the heavier evaluation work required to determine whether positions are healthy or liquidation candidates.
+
+Each indexing task:
+
+* reads a batch message from SQS,
+* fetches the relevant CDP data from the Radix Gateway,
+* computes health and eligibility metrics,
+* writes a **batch snapshot** to S3,
+* enqueues liquidation jobs for positions that breach protocol thresholds.
+
+### Compute strategy
+
+The ECS cluster uses a mixed-capacity model:
+
+* **one standard instance** remains online as baseline capacity,
+* additional capacity is added through **Spot-backed instances** when workload increases.
+
+This creates a practical balance between availability and cost efficiency. The platform keeps a minimal always-on processing footprint, then scales more economically during bursts.
+
+### Why ECS for the Indexer
+
+The indexer is better suited to ECS than to short-lived Lambda execution because the workload is batch-oriented and variable in duration. It benefits from stable compute, queue-based scaling, and a capacity model that can combine predictable baseline resources with cheaper burst capacity.
+
+### State persistence
+
+The indexer writes **batch snapshots** to **Amazon S3**.
+
+S3 is used here as a durable and cost-effective store for derived off-chain outputs, not as the system of record. The authoritative source of truth remains the **Radix ledger**. That distinction is important: the cloud backend materializes operational state for monitoring, analysis, and execution, but does not replace the blockchain as the core data authority.
+
+---
+
+## Tier 3: Execution Layer
+
+### Liquidator
+
+The **Liquidator** is an AWS Lambda function triggered by the **Liquidation SQS queue**.
+
+Each invocation handles a single liquidation unit of work. This keeps the execution layer narrow, isolated, and easy to scale during bursts.
+
+Its responsibilities include:
+
+* loading the queued liquidation candidate,
+* validating that the candidate is still actionable,
+* constructing and submitting the transaction,
+* recording execution outcome for monitoring and troubleshooting.
+
+Lambda is a strong fit for this tier because liquidation work is bursty, independent, and short-lived.
+
+---
+
+## Reliability and Message Safety
+
+### Durable queue boundaries
+
+The system uses **Amazon SQS** between tiers to create durable handoff boundaries. This improves resilience and fault isolation: if one service slows down or temporarily fails, work is buffered rather than lost.
+
+### At-least-once delivery
+
+Because the queues operate with **at-least-once delivery**, duplicate processing is a normal part of the system model. The architecture is designed with that assumption in mind.
+
+### Stale message validation
+
+A liquidation candidate may become outdated between detection and execution. For example, a position may already have been healed, repaid, or liquidated by the time the execution function runs.
+
+To handle that safely, the liquidator performs **stale message validation** before attempting execution. If a queued liquidation is no longer actionable, it is treated as a safe no-op rather than a failure.
+
+This is a key correctness mechanism in the platform. It allows the system to use asynchronous queues without turning delay into protocol risk.
+
+### Back-pressure and controlled degradation
+
+The design makes pressure visible instead of hiding it:
+
+* if indexing slows, the indexer queue grows,
+* if execution slows, the liquidation queue grows,
+* both حالات remain observable through queue depth and message age.
+
+That is a deliberate operational choice. The goal is not to pretend the system never experiences backlog; the goal is to make backlog **safe, measurable, and manageable**.
 
 ---
 
 ## Observability
 
-The system prioritizes comprehensive visibility through a **Grafana Cloud** integration, managed via the `grafana-metrics` and `grafana-logs` blueprints.
+The platform is built with operational visibility in mind.
 
-- **Logs (Loki)**: Logs from Lambda functions and ECS tasks are shipped to Grafana Loki via Promtail (running as a Lambda extension or sidecar). This allows for powerful querying and aggregation of logs across all services.
-- **Metrics (Prometheus)**: CloudWatch metrics are scraped and forwarded to Grafana Prometheus, enabling real-time dashboards for queue depths, task counts, and error rates.
-- **Cost Tracking**: While CloudWatch provides the raw data, Grafana dashboards help visualize cost attribution per service.
+Logs and metrics are pushed to **Grafana Cloud** using **Grafana Terraform templates**, which provision the required integration path under the hood. In practice, the default Grafana Cloud dashboards already cover the team’s needs well, so the setup provides strong visibility with very little customization overhead.
 
-## Governance & Security
+### What is monitored
 
-### Admin & Security Layer
-The `admin` blueprint establishes the security and governance baseline:
-- **GitHub OIDC**: Enables secure, keyless authentication for GitHub Actions to deploy infrastructure, eliminating the need for long-lived AWS access keys.
-- **AWS Budgets**: Configures budget alerts (e.g., at 85% and 100% of the monthly limit) to prevent cost overruns, sending notifications to the engineering team.
-- **Artifacts Bucket**: A secure S3 bucket is used to store administrative artifacts (like the Promtail binary for logging) with strict access controls.
+The most meaningful operational signals in this system are:
+
+* SQS queue depth,
+* SQS oldest message age,
+* indexer throughput,
+* liquidation throughput,
+* Lambda error and throttling metrics,
+* ECS task and capacity health,
+* budget and spend indicators.
+
+For this architecture, **queue age** is especially important because it reflects real pipeline health more clearly than generic infrastructure metrics alone.
+
+---
+
+## Security and Governance
+
+### Deployment security
+
+Infrastructure is deployed through **GitHub Actions** using **AWS OIDC federation**, eliminating the need for long-lived AWS credentials in CI/CD.
+
+### Cost governance
+
+The platform includes budget alerting so the team can detect abnormal spend early, especially during periods of high market volatility.
+
+### Administrative controls
+
+Administrative artifacts are stored in secured S3 storage with infrastructure-managed access controls.
+
+### Runtime security posture
+
+The intended runtime baseline follows standard production practices:
+
+* least-privilege IAM for services,
+* controlled access to storage resources,
+* encryption in transit and at rest where supported,
+* no reliance on manually distributed static cloud credentials.
 
 ---
 
 ## Infrastructure as Code
 
-The 3-layer structure (Modules → Blueprints → Environments) described above is implemented as follows:
+The Terraform codebase follows a three-layer structure designed for reuse, clarity, and environment parity.
 
-| Layer | Path | Purpose |
-|-------|------|----------|
-| **Modules** | `modules/` | Generic AWS primitives (`secure_s3_bucket`, `ecs_autoscaling_service`, `scheduled_lambda`) |
-| **Blueprints** | `blueprints/` | Composed services (e.g., `liquidation-service` = ECS + Lambda + SQS) |
-| **Environments** | `environments/` | Deployment configs (`mainnet`, `stokenet`) with environment-specific parameters |
+| Layer            | Path            | Purpose                                                                                                                       |
+| ---------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Modules**      | `modules/`      | Reusable infrastructure primitives such as secure S3 buckets, ECS services, scheduled Lambda functions, and autoscaling logic |
+| **Blueprints**   | `blueprints/`   | Higher-level service compositions that package modules into deployable capabilities                                           |
+| **Environments** | `environments/` | Thin environment definitions such as `mainnet` and `stokenet` that parameterize shared blueprints                             |
 
-### Repository Structure
-
-Since we use blueprints, creating a new environment (like a `devnet`) is as simple as creating a new directory in `environments/` and calling the existing blueprints with appropriate variables.
-
-### Safety Mechanisms
-
-State locking via DynamoDB prevents two engineers from running `terraform apply` simultaneously, which could corrupt infrastructure or create partial deployments. Our CI/CD pipeline runs `terraform plan` on every pull request and posts the output as a comment, allowing senior engineers to review proposed changes before merge. The `terraform-check-all.sh` script runs on pre-commit hooks to validate syntax and formatting across all environments, catching errors before they reach code review.
+This structure makes the architecture easier to extend and maintain. It also reduces drift between environments by keeping most infrastructure logic shared and moving environment-specific tuning into configuration.
 
 ---
 
+## CI/CD and Change Safety
 
-### Continuous Deployment (CI/CD)
+All infrastructure changes are managed through Git-based workflows and automated deployment pipelines.
 
-All infrastructure changes are managed automatically via **GitHub Actions**, ensuring a secure and consistent deployment pipeline. We use **OpenID Connect (OIDC)** for authentication, which allows GitHub Actions to assume a secure IAM role without storing long-lived AWS credentials.
+### Pull request workflow
 
-**Workflow:**
-1.  **Pull Request**: A PR triggers `terraform plan`, which runs in the CI environment. The plan output is automatically posted as a comment on the PR for team review.
-2.  **Merge to Main**: Merging the PR triggers `terraform apply`, deploying the changes to the `mainnet` or `stokenet` environments.
+On pull requests, the pipeline runs validation and `terraform plan`, allowing infrastructure changes to be reviewed before merge.
 
-This pipeline enforces code review and prevents configuration drift by ensuring all changes pass through version control.
+### Deployment workflow
 
-### Monitoring & Disaster Recovery
+On merge, the pipeline runs `terraform apply` against the target environment, making version-controlled automation the default path for change.
 
-- **Alerts**: Alerts are configured for critical metrics like High Message Age (SQS), Lambda Errors, and Budget thresholds.
-- **Disaster Recovery**:
-    - **Stateless Architecture**: The backend logic is fundamentally stateless. All critical data (CDP state) is stored in S3 for analytics and checking, but the source of truth is always the Radix Ledger.
-    - **Region Failure**: In the unlikely event of a complete region failure (e.g., us-east-1 goes down), we can rapidly redeploy the entire Terraformed stack to a new region (e.g., eu-central-1). Since the system is stateless and event-driven, it will simply begin processing the blockchain from the current epoch in the new region.
+### State protection
+
+Terraform state locking is handled through **DynamoDB**, which prevents concurrent applies from corrupting infrastructure state.
+
+### Local validation
+
+Repository scripts such as `terraform-check-all.sh` provide quick feedback on syntax, formatting, and multi-environment consistency before changes reach CI.
 
 ---
 
-## Future Enhancements
+## Recovery Posture
 
-In the short term, we plan to implement circuit breakers in the Indexer to prevent cascading failures when the Radix Gateway experiences high latency. We'll also optimize the Indexer by batching Radix API calls to fetch data for 50 CDPs per request instead of one call per CDP, reducing API overhead.
+The backend is operationally favorable to recovery because it is largely infrastructure-defined and the **Radix ledger remains the source of truth**.
 
-### Advanced Analytics
-We plan to leverage **AWS Glue Crawler** and **Athena** to unlock deeper potential from the data stored in S3. By storing CDP state snapshots in **Parquet** format, we can run complex, SQL-like analytical queries directly on our S3 data lake without managing a dedicated database instance. This will allow us to analyze historical trends, back-test liquidation strategies, and visualize protocol health over time.
+A **full teardown and successful redeployment** of the stack has already been tested. That is a strong practical signal that the platform can be recreated cleanly from code.
 
-Long-term enhancements include multi-region active-active deployment and potentially migrating to Kubernetes if the engineering team scales significantly.
+Formal cross-region failover has not yet been tested as an incident scenario. However, given the successful full redeployment test, regional recreation is expected to be straightforward and primarily a matter of changing region-specific configuration.
 
+That recovery posture can be summarized simply:
+
+* **tested:** full teardown and rebuild,
+* **not yet formally tested:** cross-region incident failover,
+* **strength:** reproducible infrastructure with minimal dependence on off-chain primary state.
+
+---
+
+## Why This Project Matters
+
+This repository is more than a DeFi backend. It is a concrete example of production-oriented infrastructure engineering.
+
+It demonstrates the ability to:
+
+* translate a financial operations problem into a scalable cloud architecture,
+* choose the right AWS services for different workload patterns,
+* structure Terraform for reuse and maintainability,
+* make explicit tradeoffs between cost, latency, and resilience,
+* design systems that remain observable and recoverable under stress.
+
+For recruiters and hiring managers, the key takeaway is simple: this project shows practical experience building and operating **distributed AWS infrastructure for a time-sensitive production workload**.
+
+---
+
+## Engineering Highlights
+
+* **Cloud architecture:** designed a multi-tier AWS system using Lambda, ECS, SQS, S3, EventBridge, and Grafana Cloud
+* **Infrastructure as Code:** organized Terraform into reusable modules, higher-level blueprints, and thin environment definitions
+* **Scalability:** combined baseline compute with Spot-backed burst capacity for variable workloads
+* **Reliability:** used durable queue boundaries and stale-message validation to improve operational safety
+* **Observability:** implemented centralized logs and metrics with low-maintenance Grafana Cloud integration
+* **Recovery:** validated full teardown and redeployment from Terraform-managed infrastructure
+* **Cost awareness:** optimized for low steady-state cost while preserving responsiveness during liquidation events
+
+---
+
+## Future Improvements
+
+Near-term improvements include stronger circuit-breaker behavior around upstream dependency degradation, more aggressive batching against external APIs, and richer replay or incident-analysis tooling.
+
+Longer term, the platform also creates a path toward historical analytics through S3 snapshots, Parquet storage, AWS Glue cataloging, and Athena-based querying.
