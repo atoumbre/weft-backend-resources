@@ -39,6 +39,15 @@ This repository implements the cloud infrastructure that supports that operating
 
 ---
 
+## How This Repository Fits into the Platform
+
+The Weft backend is intentionally split across two repositories:
+
+- **[weft-backend-resources](https://github.com/atoumbre/weft-backend-resources)** defines the cloud platform: queues, schedulers, ECS services, Lambda triggers, storage, observability, and deployment automation.
+- **[weft-backend-services](https://github.com/atoumbre/weft-backend-services)** defines the executable workloads that run on that platform.
+
+Together, they form a single backend system.
+
 ## Architecture Overview
 
 The system uses **scheduled polling plus asynchronous internal processing**.
